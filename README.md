@@ -137,6 +137,13 @@ export const FreeLLMAPI = async (input, options) => ({
 
 参考：magpie 仓库 `docs/subsystems/provider-plugins.md` 与 `internal/plugin/host.js`。
 
+## 排错 / 已知行为
+
+- **参考页里的网址点不了（不能跳转）**：这是 magpie 的安全设计——插件页运行在 `sandbox allow-scripts` 的离屏 iframe 里（`connect-src 'none'`，且没有弹窗/顶层导航权限），页面无法打开任何外部链接。因此本页把网址做成了「点一下即全选、可复制」的文本：**选中 → 复制 → 粘到浏览器**打开即可。
+- **在 magpie 里跑任务被中断 / 模型消失**：0.1.1 起已修复——`provider.models` 不再抛错，`/v1/models` 带超时并跟随 magpie 的取消信号；网关慢或暂时停掉时回退到上一次成功拉到的模型列表，不会让已配置的模型突然消失而打断正在进行的任务。
+  - 若仍中断：先确认 FreeLLMAPI 正在运行（`http://localhost:3001` 能打开），并在 log 里看是不是模型返回了 429/上游错误；再 `magpie plugin update magpie-plugin-freellmapi` 或 off/on 重载插件。把 magpie 里该 provider 的具体报错发我即可继续定位。
+- **`/v1/usage` 显示错误**：用量只对 **统一 key**（`freellmapi-…`）开放；用 client-profile key（`sk-cp-…`）会 403，属正常。
+
 ## 许可证
 
 MIT。

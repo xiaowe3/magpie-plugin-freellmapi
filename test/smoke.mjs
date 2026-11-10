@@ -1,7 +1,9 @@
 // Smoke test for the FreeLLMAPI magpie plugin.
 // Starts a mock FreeLLMAPI gateway (OpenAI-compatible /v1), imports the plugin,
 // and exercises every hook the magpie host would call:
-//   config -> auth.loader -> loader.fetch -> provider.models
+//   config -> auth.loader -> loader.fetch -> provider.models -> auth.usage
+// It also checks that a stopped gateway never throws and yields the last good
+// model list (so an agent turn is not interrupted).
 // Run:  node test/smoke.mjs
 import http from "node:http";
 import { FreeLLMAPI } from "../index.js";
@@ -17,8 +19,6 @@ function ok(cond, msg) {
   console.log("ok  -", msg);
 }
 
-// A mock gateway: requires Bearer KEY on /v1/models and echoes the auth header
-// on /v1/chat/completions.
 const server = http.createServer((req, res) => {
   const auth = req.headers["authorization"] || "";
   if (req.method === "GET" && req.url === "/v1/models") {
@@ -74,6 +74,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const input = { client: {}, magpie: { option: () => false, options: () => ({}) } };
+const closeServer = () => new Promise((r) => (server.listening ? server.close(() => r()) : r()));
 
 try {
   const plugin = await FreeLLMAPI(input, { baseUrl: base });
@@ -81,26 +82,23 @@ try {
   ok(plugin.auth && plugin.auth.provider === "freellmapi", "auth.provider id is freellmapi");
   ok(plugin.auth.methods[0].type === "api", "one api-key sign-in method");
   ok(typeof plugin.provider.models === "function", "plugin exports provider.models hook");
+  ok(typeof plugin.auth.usage === "function", "plugin exports auth.usage hook");
 
-  // config: base normalised to /v1, provider declared
   const cfg = { provider: {} };
   await plugin.config(cfg);
   ok(cfg.provider.freellmapi, "config declares provider freellmapi");
   ok(cfg.provider.freellmapi.api === base + "/v1", "config api ends in /v1 -> " + cfg.provider.freellmapi.api);
   ok(cfg.provider.freellmapi.npm === "@ai-sdk/openai-compatible", "uses openai-compatible npm");
 
-  // config must not clobber a user's own entry
   const cfg2 = { provider: { freellmapi: { name: "Mine", api: "http://x/v1", models: {} } } };
   await plugin.config(cfg2);
   ok(cfg2.provider.freellmapi.name === "Mine", "existing provider entry kept");
 
-  // loader: base + fetch that adds Bearer
   const getAuth = async () => ({ type: "api", key: KEY });
   const o = await plugin.auth.loader(getAuth);
   ok(o.baseURL === base + "/v1", "loader baseURL = " + o.baseURL);
   ok(o.apiKey === KEY, "loader apiKey");
 
-  // loader.fetch forwards to the gateway with the Bearer header
   const r = await o.fetch(base + "/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -110,7 +108,6 @@ try {
   const j = await r.json();
   ok(j.sawAuth === "Bearer " + KEY, "gateway saw Bearer key (got " + j.sawAuth + ")");
 
-  // models: discovered, free:true, limits mapped
   const models = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
   ok(Object.keys(models).length === 3, "listed 3 models");
   ok(models["groq/llama-3.3-70b-versatile"].free === true, "model marked free");
@@ -118,35 +115,32 @@ try {
   ok(models["gemini-2.5-flash"].limit.output === 8192, "max_output mapped");
   ok(models["deepseek-v4"].limit === undefined, "no limit when vendor gives none");
 
-  // usage: month-to-date spend mapped to display-only windows
   const u = await plugin.auth.usage(getAuth);
-  ok(typeof plugin.auth.usage === "function", "plugin exports auth.usage hook");
   ok(typeof u.plan === "string" && u.plan.startsWith("FreeLLMAPI"), "usage plan = " + u.plan);
   ok(u.until === "2026-12-01T00:00:00.000Z", "usage until = resetsAt");
   ok(Array.isArray(u.windows) && u.windows.length === 3, "usage windows: all + 2 platforms");
   ok(u.windows[0].name === "All providers" && /1\.2M tokens/.test(u.windows[0].display), "usage total formatted -> " + u.windows[0].display);
   ok(u.windows[1].name === "groq" && u.windows[1].aside === true, "per-platform window is display-only");
 
-  // usage without a key: a clear message, no throw
   const u2 = await plugin.auth.usage(async () => undefined);
   ok(/unified key/.test(u2.error), "usage asks for a unified key when unsigned");
 
-  // signed-in + gateway down: models throws (magpie surfaces it, keeps last)
-  const badBase = "http://127.0.0.1:1";
-  const bad = await FreeLLMAPI(input, { baseUrl: badBase });
-  let threw = false;
-  try {
-    await bad.provider.models({ models: {} }, { auth: { type: "api", key: KEY } });
-  } catch (e) {
-    threw = /could not list FreeLLMAPI models/.test(e.message);
-  }
-  ok(threw, "models hook throws a clear error when signed in and gateway is down");
+  // gateway gone: models NEVER throws and returns the last good list, so a
+  // configured model does not vanish and a running agent turn is not broken
+  await closeServer();
+  const again = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
+  ok(again && Object.keys(again).length === 3, "models returns the cached list when the gateway is down (no throw)");
 
-  // not signed in: returns quietly, no throw
+  // a fresh install with no cache and a dead gateway returns {} quietly
+  const fresh = await FreeLLMAPI(input, { baseUrl: "http://127.0.0.1:1" });
+  const empty = await fresh.provider.models({ models: {} }, { auth: { type: "api", key: KEY } });
+  ok(empty && typeof empty === "object" && Object.keys(empty).length === 0, "models returns {} quietly with no cache");
+
+  // not signed in: returns quietly too
   const quiet = await plugin.provider.models({ models: {} }, { auth: undefined });
   ok(typeof quiet === "object", "models hook returns quietly when not signed in");
 
   console.log("\nALL SMOKE CHECKS PASSED");
 } finally {
-  server.close();
+  await closeServer();
 }

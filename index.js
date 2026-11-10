@@ -6,22 +6,31 @@
 //
 // This plugin exposes that gateway to magpie as the provider "freellmapi":
 //   - one "api key" sign-in: paste the unified key from the FreeLLMAPI dashboard
-//   - models are discovered live from GET /v1/models, so providers/keys you add
-//     in FreeLLMAPI show up in magpie on the next refresh
+//   - models are discovered live from GET /v1/models, and the last good list is
+//     cached, so a slow or stopped gateway never makes models vanish mid-task
 //   - requests are forwarded to the local gateway with a Bearer header
-//   - every discovered model is marked free, so magpie's FreeFirst routing can
-//     prefer it
+//   - every discovered model is marked free (magpie's FreeFirst routing can use it)
+//   - auth.usage reads GET /v1/usage for the Usage page
 //
 // Base URL is configurable through the plugin's package options (Plugins page
 // -> Options JSON): { "baseUrl": "http://localhost:3001" }
 //
 // Written against magpie's OpenCode-v1 provider-plugin contract:
-//   export const X = async (input, options) => ({ config, auth, provider, ... })
-// See docs/subsystems/provider-plugins.md in the magpie repo.
+//   export const X = async (input, options) => ({ config, auth, provider })
+// See magpie docs/subsystems/provider-plugins.md and internal/plugin/host.js.
 
 const PROVIDER_ID = "freellmapi"
 
-// ICON is an inline SVG (data URI) so the provider card has a mark without any
+// How long a listing/usage read may take before it gives up. Kept under
+// magpie's own listWait so the hook answers in time instead of running late.
+const LIST_TIMEOUT_MS = 8000
+const USAGE_TIMEOUT_MS = 8000
+
+// lastGoodModels[cacheKey] is the model table last read from the gateway, so a
+// gateway that is down or slow yields the previous list (never an empty one).
+const lastGoodModels = new Map()
+
+// ICON is an inline SVG (data URI) so the provider card has a mark with no
 // network fetch. iconOf() accepts https:// and data:image/ URIs.
 const ICON =
   "data:image/svg+xml," +
@@ -33,8 +42,6 @@ const ICON =
   )
 
 // apiBase normalises the configured base URL to end in /v1.
-// "http://localhost:3001" and "http://localhost:3001/" both become
-// "http://localhost:3001/v1"; a value already ending in /v1 is kept.
 function apiBase(options) {
   let base =
     typeof options?.baseUrl === "string" && options.baseUrl.trim()
@@ -43,6 +50,30 @@ function apiBase(options) {
   base = base.replace(/\/+$/, "")
   if (!/\/v1$/.test(base)) base += "/v1"
   return base
+}
+
+// deadline combines magpie's own abort signal (so a listing that gave up stops
+// the upstream read) with a timeout, whichever comes first.
+function deadline(signal, ms) {
+  const t =
+    typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+      ? AbortSignal.timeout(ms)
+      : undefined
+  if (signal && t && typeof AbortSignal.any === "function") {
+    try {
+      return AbortSignal.any([signal, t])
+    } catch {
+      return signal
+    }
+  }
+  return signal || t
+}
+
+function fmt(n) {
+  const x = Number(n) || 0
+  if (x >= 1e6) return (x / 1e6).toFixed(1) + "M"
+  if (x >= 1e3) return (x / 1e3).toFixed(1) + "K"
+  return String(x)
 }
 
 export const FreeLLMAPI = async (input, options) => {
@@ -72,9 +103,8 @@ export const FreeLLMAPI = async (input, options) => {
           placeholder: "freellmapi-…",
         },
       ],
-      // loader runs once per signed-in account. It hands magpie the base URL
-      // and a fetch that adds the Bearer header to every request the gateway
-      // routes to this provider.
+      // loader hands magpie the base URL and a fetch that adds the Bearer
+      // header to every request the gateway routes to this provider.
       loader: async (getAuth) => {
         const a = await getAuth()
         return {
@@ -86,31 +116,25 @@ export const FreeLLMAPI = async (input, options) => {
             if (auth?.type === "api" && auth.key) {
               headers.set("authorization", "Bearer " + auth.key)
             }
-            // the host strips its own x-magpie-* headers from what a plugin
-            // sends; nothing extra to do here.
-            return fetch(url, { ...init, headers })
+            // everything else of the request (method, body, signal, streaming)
+            // is passed straight through, so streaming and aborts keep working.
+            return fetch(url, { ...(init ?? {}), headers })
           },
         }
       },
 
-      // usage reads GET /v1/usage (unified key only): the month-to-date spend
-      // per provider platform, shown on magpie's Usage page. It reports counts,
-      // not a share of a cap, so each window is display-only (aside: true) and
-      // never steers routing.
-      usage: async (getAuth) => {
+      // usage reads GET /v1/usage (unified key only): month-to-date spend per
+      // provider platform, shown on magpie's Usage page. It reports counts, not
+      // a share of a cap, so each window is display-only (aside: true).
+      usage: async (getAuth, provider, opts) => {
         const a = await getAuth()
         if (a?.type !== "api" || !a.key) {
           return { error: "add a FreeLLMAPI unified key to see usage" }
         }
-        const fmt = (n) => {
-          const x = Number(n) || 0
-          if (x >= 1e6) return (x / 1e6).toFixed(1) + "M"
-          if (x >= 1e3) return (x / 1e3).toFixed(1) + "K"
-          return String(x)
-        }
         try {
           const r = await fetch(base + "/usage", {
             headers: { accept: "application/json", authorization: "Bearer " + a.key },
+            signal: deadline(opts?.signal, USAGE_TIMEOUT_MS),
           })
           if (r.status === 403) {
             return { error: "usage needs the unified key — client-profile keys can't read it" }
@@ -152,39 +176,29 @@ export const FreeLLMAPI = async (input, options) => {
 
     provider: {
       id: PROVIDER_ID,
-      // models runs for the account's model list. It asks the gateway's
-      // /v1/models and maps the OpenAI-shaped answer into magpie's model
-      // table, marking every model free. A failure keeps the last list (magpie
-      // does that), so it throws only when an account is signed in.
-      models: async (p, { auth }) => {
-        const models = { ...(p?.models ?? {}) }
+      // models asks the gateway's /v1/models and maps it into magpie's table,
+      // marking every model free. It NEVER throws: on a slow/stopped gateway it
+      // returns the last good list (so a configured model never disappears and
+      // an agent turn isn't interrupted), or the list magpie already had.
+      models: async (p, { auth, signal } = {}) => {
+        const models = p?.models ?? {}
         const key = auth?.type === "api" && typeof auth.key === "string" ? auth.key : ""
-        const signedIn = !!key
-
+        const headers = { accept: "application/json" }
+        if (key) headers.authorization = "Bearer " + key
         try {
-          const headers = { accept: "application/json" }
-          if (key) headers.authorization = "Bearer " + key
-          const res = await fetch(base + "/models", { headers })
-          if (!res.ok) {
-            throw new Error(`FreeLLMAPI answered ${res.status} for GET /v1/models`)
-          }
+          const res = await fetch(base + "/models", {
+            headers,
+            signal: deadline(signal, LIST_TIMEOUT_MS),
+          })
+          if (!res.ok) throw new Error(`FreeLLMAPI answered ${res.status} for GET /v1/models`)
           const data = await res.json()
-          const list = Array.isArray(data?.data)
-            ? data.data
-            : Array.isArray(data)
-              ? data
-              : []
+          const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []
           for (const m of list) {
             const id = typeof m?.id === "string" ? m.id.trim() : ""
             if (!id) continue
-            const ctx =
-              Number(m?.context_length ?? m?.context_window ?? m?.limit?.context ?? 0) || 0
-            const out =
-              Number(m?.max_output_tokens ?? m?.limit?.output ?? 0) || 0
-            const entry = {
-              name: m?.name || m?.display_name || id,
-              free: true,
-            }
+            const ctx = Number(m?.context_length ?? m?.context_window ?? m?.limit?.context ?? 0) || 0
+            const out = Number(m?.max_output_tokens ?? m?.limit?.output ?? 0) || 0
+            const entry = { name: m?.name || m?.display_name || id, free: true }
             if (ctx || out) {
               entry.limit = {}
               if (ctx) entry.limit.context = ctx
@@ -192,13 +206,14 @@ export const FreeLLMAPI = async (input, options) => {
             }
             models[id] = entry
           }
+          lastGoodModels.set(base, { ...models })
           return models
-        } catch (e) {
-          // Not signed in: nothing to show, don't alarm. Signed in: let magpie
-          // surface the error and keep whatever list it had.
-          if (signedIn) {
-            throw new Error(`could not list FreeLLMAPI models: ${e?.message ?? e}`)
-          }
+        } catch {
+          const cached = lastGoodModels.get(base)
+          // a good list from before: hand it back as the current one
+          if (cached && Object.keys(cached).length) return cached
+          // nothing cached: return what magpie gave (same object), which it
+          // reads as "fell back" and keeps its own last list
           return models
         }
       },

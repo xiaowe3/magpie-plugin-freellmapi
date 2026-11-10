@@ -1,6 +1,6 @@
 {
   "name": "magpie-plugin-freellmapi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "FreeLLMAPI provider plugin for magpie: ~34 free LLM providers behind one local OpenAI-compatible gateway.",
   "type": "module",
   "main": "index.js",
@@ -12,6 +12,7 @@
     "index.js",
     "page/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
