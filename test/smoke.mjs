@@ -1,151 +1,108 @@
-// Smoke test for the FreeLLMAPI magpie plugin.
-// Starts a mock FreeLLMAPI gateway (OpenAI-compatible /v1), imports the plugin,
-// and exercises every hook the magpie host would call:
-//   config -> auth.loader -> loader.fetch -> provider.models -> auth.usage
-// It also checks that a stopped gateway never throws and yields the last good
-// model list (so an agent turn is not interrupted).
+// Smoke test for the free-provider hub plugin.
+// Exercises the provider factory against a mock OpenAI-compatible gateway and
+// checks that every catalog entry is exported as a magpie provider.
 // Run:  node test/smoke.mjs
-import http from "node:http";
-import { FreeLLMAPI } from "../index.js";
+import http from "node:http"
+import { catalog, makeProvider } from "../lib.mjs"
+import * as plugin from "../index.js"
 
-const KEY = "freellmapi-testkey";
+const KEY = "test-key"
 
 function ok(cond, msg) {
   if (!cond) {
-    console.error("FAIL:", msg);
-    process.exitCode = 1;
-    throw new Error(msg);
+    console.error("FAIL:", msg)
+    process.exitCode = 1
+    throw new Error(msg)
   }
-  console.log("ok  -", msg);
+  console.log("ok  -", msg)
 }
 
 const server = http.createServer((req, res) => {
-  const auth = req.headers["authorization"] || "";
-  const path = new URL(req.url, "http://localhost").pathname;
+  const auth = req.headers["authorization"] || ""
+  const path = new URL(req.url, "http://localhost").pathname
   if (req.method === "GET" && path === "/v1/models") {
-    if (auth !== "Bearer " + KEY) {
-      res.writeHead(401, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ error: "bad key" }));
-    }
-    res.writeHead(200, { "content-type": "application/json" });
+    res.writeHead(200, { "content-type": "application/json" })
     return res.end(
       JSON.stringify({
         object: "list",
         data: [
-          { id: "groq/llama-3.3-70b-versatile", context_length: 131072, owned_by: "groq", available: true },
-          { id: "gemini-2.5-flash", context_length: 1048576, max_output_tokens: 8192, available: true },
-          { id: "deepseek-v4", available: true },
-          // an unavailable row must be dropped even if a gateway ignores ?available=true
-          { id: "disabled-model", available: false, unavailable_reason: "no_key" },
+          { id: "good-1", context_length: 131072, available: true },
+          { id: "good-2", max_output_tokens: 4096, available: true },
+          { id: "dead-1", available: false },
         ],
       }),
-    );
-  }
-  if (req.method === "GET" && path === "/v1/usage") {
-    if (auth !== "Bearer " + KEY) {
-      res.writeHead(403, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ error: { message: "unified key only" } }));
-    }
-    res.writeHead(200, { "content-type": "application/json" });
-    return res.end(
-      JSON.stringify({
-        object: "usage",
-        month: "2026-11",
-        resetsAt: "2026-12-01T00:00:00.000Z",
-        requests: 42,
-        tokens: 1234567,
-        byPlatform: [
-          { platform: "groq", requests: 30, tokens: 1000000 },
-          { platform: "google", requests: 12, tokens: 234567 },
-        ],
-      }),
-    );
+    )
   }
   if (req.method === "POST" && path === "/v1/chat/completions") {
-    let body = "";
-    req.on("data", (c) => (body += c));
+    let b = ""
+    req.on("data", (c) => (b += c))
     req.on("end", () => {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, sawAuth: auth, echoed: body }));
-    });
-    return;
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(JSON.stringify({ ok: true, sawAuth: auth, echoed: b }))
+    })
+    return
   }
-  res.writeHead(404);
-  res.end("nope");
-});
+  res.writeHead(404)
+  res.end("nope")
+})
 
-await new Promise((r) => server.listen(0, "127.0.0.1", r));
-const base = `http://127.0.0.1:${server.address().port}`;
-const input = { client: {}, magpie: { option: () => false, options: () => ({}) } };
-const closeServer = () => new Promise((r) => (server.listening ? server.close(() => r()) : r()));
+await new Promise((r) => server.listen(0, "127.0.0.1", r))
+const base = `http://127.0.0.1:${server.address().port}/v1`
+const input = { client: {}, magpie: { option: () => false, options: () => ({}) } }
+const closeServer = () => new Promise((r) => (server.listening ? server.close(() => r()) : r()))
 
 try {
-  const plugin = await FreeLLMAPI(input, { baseUrl: base });
-  ok(typeof plugin.config === "function", "plugin exports config hook");
-  ok(plugin.auth && plugin.auth.provider === "freellmapi", "auth.provider id is freellmapi");
-  ok(plugin.auth.methods[0].type === "api", "one api-key sign-in method");
-  ok(typeof plugin.provider.models === "function", "plugin exports provider.models hook");
-  ok(typeof plugin.auth.usage === "function", "plugin exports auth.usage hook");
+  // every catalog entry is exported as its own provider function
+  const ids = Object.keys(catalog)
+  ok(ids.length >= 20, `catalog has ${ids.length} free gateways`)
+  for (const id of ids) ok(typeof plugin[id] === "function", `export for "${id}" is a provider function`)
 
-  const cfg = { provider: {} };
-  await plugin.config(cfg);
-  ok(cfg.provider.freellmapi, "config declares provider freellmapi");
-  ok(cfg.provider.freellmapi.api === base + "/v1", "config api ends in /v1 -> " + cfg.provider.freellmapi.api);
-  ok(cfg.provider.freellmapi.npm === "@ai-sdk/openai-compatible", "uses openai-compatible npm");
+  const mk = makeProvider({ id: "mock", name: "Mock Free", baseUrl: base })
+  const p = await mk(input, {})
 
-  const cfg2 = { provider: { freellmapi: { name: "Mine", api: "http://x/v1", models: {} } } };
-  await plugin.config(cfg2);
-  ok(cfg2.provider.freellmapi.name === "Mine", "existing provider entry kept");
+  const cfg = { provider: {} }
+  await p.config(cfg)
+  ok(cfg.provider.mock, "config declares provider mock")
+  ok(cfg.provider.mock.api === base, "config api = " + cfg.provider.mock.api)
+  ok(cfg.provider.mock.npm === "@ai-sdk/openai-compatible", "uses openai-compatible npm")
 
-  const getAuth = async () => ({ type: "api", key: KEY });
-  const o = await plugin.auth.loader(getAuth);
-  ok(o.baseURL === base + "/v1", "loader baseURL = " + o.baseURL);
-  ok(o.apiKey === KEY, "loader apiKey");
-
-  const r = await o.fetch(base + "/v1/chat/completions", {
+  const getAuth = async () => ({ type: "api", key: KEY })
+  const o = await p.auth.loader(getAuth)
+  ok(o.baseURL === base, "loader baseURL")
+  const r = await o.fetch(base + "/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model: "gemini-2.5-flash", messages: [] }),
-  });
-  ok(r.status === 200, "forwarded request answered 200");
-  const j = await r.json();
-  ok(j.sawAuth === "Bearer " + KEY, "gateway saw Bearer key (got " + j.sawAuth + ")");
+    body: JSON.stringify({ model: "good-1" }),
+  })
+  ok(r.status === 200, "forwarded request 200")
+  ok((await r.json()).sawAuth === "Bearer " + KEY, "gateway saw Bearer key")
 
-  const models = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
-  ok(Object.keys(models).length === 4, "listed 3 available models + auto");
-  ok(models["disabled-model"] === undefined, "unavailable model dropped");
-  ok(!!models["auto"], "auto router model always offered");
-  ok(models["groq/llama-3.3-70b-versatile"].free === true, "model marked free");
-  ok(models["groq/llama-3.3-70b-versatile"].limit.context === 131072, "context mapped");
-  ok(models["gemini-2.5-flash"].limit.output === 8192, "max_output mapped");
-  ok(models["deepseek-v4"].limit === undefined, "no limit when vendor gives none");
+  const models = await p.provider.models(cfg.provider.mock, { auth: { type: "api", key: KEY } })
+  ok(Object.keys(models).length === 2, "listed 2 available models")
+  ok(models["dead-1"] === undefined, "unavailable model dropped")
+  ok(models["good-1"].limit.context === 131072, "context mapped")
+  ok(models["good-2"].limit.output === 4096, "output mapped")
 
-  const u = await plugin.auth.usage(getAuth);
-  ok(typeof u.plan === "string" && u.plan.startsWith("FreeLLMAPI"), "usage plan = " + u.plan);
-  ok(u.until === "2026-12-01T00:00:00.000Z", "usage until = resetsAt");
-  ok(Array.isArray(u.windows) && u.windows.length === 3, "usage windows: all + 2 platforms");
-  ok(u.windows[0].name === "All providers" && /1\.2M tokens/.test(u.windows[0].display), "usage total formatted -> " + u.windows[0].display);
-  ok(u.windows[1].name === "groq" && u.windows[1].aside === true, "per-platform window is display-only");
+  // without a key and not keyless: no network, quiet empty (so a page full of
+  // un-signed providers is fast and doesn't hit vendors)
+  const dead = makeProvider({ id: "dead", name: "Dead", baseUrl: "http://127.0.0.1:1" })
+  const pd = await dead(input, {})
+  const m0 = await pd.provider.models({ models: {} }, { auth: undefined })
+  ok(m0 && Object.keys(m0).length === 0, "no key -> quiet empty, no vendor call")
 
-  const u2 = await plugin.auth.usage(async () => undefined);
-  ok(/unified key/.test(u2.error), "usage asks for a unified key when unsigned");
+  // keyless provider lists without a key
+  const kl = makeProvider({ id: "kl", name: "Keyless", baseUrl: base, keyless: true })
+  const pk = await kl(input, {})
+  const mk2 = await pk.provider.models({ models: {} }, { auth: undefined })
+  ok(Object.keys(mk2).length === 2, "keyless provider lists models without a key")
+  ok(pk.auth.methods[0].keyless === true, "keyless sign-in method declared")
 
-  // gateway gone: models NEVER throws and returns the last good list, so a
-  // configured model does not vanish and a running agent turn is not broken
-  await closeServer();
-  const again = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
-  ok(again && Object.keys(again).length === 4, "models returns the cached list when the gateway is down (no throw)");
+  // gateway down after a good read: models returns the cached list, never throws
+  await closeServer()
+  const again = await p.provider.models(cfg.provider.mock, { auth: { type: "api", key: KEY } })
+  ok(again && Object.keys(again).length === 2, "models returns cached list when gateway is down (no throw)")
 
-  // a fresh install with no cache and a dead gateway returns {} quietly
-  const fresh = await FreeLLMAPI(input, { baseUrl: "http://127.0.0.1:1" });
-  const empty = await fresh.provider.models({ models: {} }, { auth: { type: "api", key: KEY } });
-  ok(empty && typeof empty === "object" && Object.keys(empty).length === 0, "models returns {} quietly with no cache");
-
-  // not signed in: returns quietly too
-  const quiet = await plugin.provider.models({ models: {} }, { auth: undefined });
-  ok(typeof quiet === "object", "models hook returns quietly when not signed in");
-
-  console.log("\nALL SMOKE CHECKS PASSED");
+  console.log("\nALL SMOKE CHECKS PASSED")
 } finally {
-  await closeServer();
+  await closeServer()
 }

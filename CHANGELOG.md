@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- **重做：插件自带免费渠道，不再依赖单独运行 freellmapi 服务。** 把 FreeLLMAPI 聚合的免费网关（baseUrl 取自其源码 `server/src/providers/`）做成 magpie 的**一批原生 provider**：每个渠道各自填 key，magpie 原生列模型，可用路由组在这些渠道间做失败切换。
+- 新增渠道目录 `lib.mjs`（27 个 OpenAI 兼容免费网关）+ 工厂 `makeProvider`；`index.js` 每个渠道导出为一个 provider。增删渠道只需改 `lib.mjs` 和 `index.js` 的一行导出。
+- 未填 key 的渠道不再触网（列表快速、干净）；模型读取带超时、失败回退上次成功列表、从不抛错（延续 0.1.1 的稳定性修复）。
+- 保留「免费渠道参考页」，网址为可复制文本（magpie 沙箱禁止跳转外链）。
+
 ## 0.1.2
 
 - **登录后直接接管 FreeLLMAPI 的模型调用。** 模型列表改为读 `GET /v1/models?available=true`，只把 FreeLLMAPI **当前真能服务**的模型接入 magpie；同时天然带上 FreeLLMAPI 的路由模型：
