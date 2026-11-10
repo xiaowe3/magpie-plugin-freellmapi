@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FreeLLMAPI 免费渠道</title>
+<style>
+  :root{--card:#171a21;--line:#262b36;--fg:#e7e9ee;--muted:#9aa3b2;--accent:#38e07b;--warn:#ffb454}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--fg);font-size:13px;line-height:1.55;padding:6px 4px 28px;background:transparent}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:16px;margin:6px 0 2px}
+  h2{font-size:13px;margin:20px 0 8px;color:var(--accent);letter-spacing:.02em}
+  p.note{color:var(--muted);margin:4px 0 10px}
+  a{color:#7cc4ff;text-decoration:none}a:hover{text-decoration:underline}
+  table{width:100%;border-collapse:collapse;margin:6px 0 4px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  tr:last-child td{border-bottom:none}
+  td.q{color:var(--muted);white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.hot{color:#0b1220;background:var(--accent);border-color:var(--accent);font-weight:700}
+  .tag.warn{color:var(--warn);border-color:#4a3a20}
+  .foot{color:var(--muted);font-size:11px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FreeLLMAPI 免费渠道速查</h1>
+  <p class="note">去各家领免费 key → 填进 FreeLLMAPI 的 Keys 页 → 生成统一 key → 在 magpie 的 FreeLLMAPI provider 里登录。额度与入口常变，以 <a href="https://freellmapi.co/models.html" target="_blank" rel="noreferrer">freellmapi.co/models</a> 为准。</p>
+
+  <h2>A. 一线大厂直营 · 推荐起步</h2>
+  <table>
+    <tr><th>供应商</th><th>免费额度</th><th>领取入口</th><th>门槛</th></tr>
+    <tr><td>Google AI Studio</td><td class="q">免费 Gemini 层</td><td><a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a></td><td>Google 账号</td></tr>
+    <tr><td>Groq</td><td class="q">免费 RPM/RPD</td><td><a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a></td><td>邮箱</td></tr>
+    <tr><td>Cerebras</td><td class="q">免费 daily</td><td><a href="https://cloud.cerebras.ai" target="_blank" rel="noreferrer">cloud.cerebras.ai</a></td><td>邮箱</td></tr>
+    <tr><td>Mistral</td><td class="q">免费层</td><td><a href="https://console.mistral.ai/api-keys/" target="_blank" rel="noreferrer">console.mistral.ai/api-keys</a></td><td>邮箱</td></tr>
+    <tr><td>NVIDIA NIM</td><td class="q">免费 credits</td><td><a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noreferrer">build.nvidia.com/settings/api-keys</a></td><td>账号</td></tr>
+    <tr><td>Cohere</td><td class="q">trial key</td><td><a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noreferrer">dashboard.cohere.com/api-keys</a></td><td>邮箱（需验证）</td></tr>
+    <tr><td>Cloudflare Workers AI</td><td class="q">10k neurons/天</td><td><a href="https://dash.cloudflare.com" target="_blank" rel="noreferrer">dash.cloudflare.com</a></td><td>账号+account_id</td></tr>
+    <tr><td>HuggingFace Router</td><td class="q">免费额度</td><td><a href="https://huggingface.co/settings/tokens" target="_blank" rel="noreferrer">huggingface.co/settings/tokens</a></td><td>HF 账号</td></tr>
+    <tr><td>Z.ai (智谱)</td><td class="q">GLM Flash 免费</td><td><a href="https://z.ai/manage-apikey/apikey-list" target="_blank" rel="noreferrer">z.ai/manage-apikey</a></td><td>账号</td></tr>
+    <tr><td>OpenRouter</td><td class="q">:free 模型</td><td><a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a></td><td>邮箱</td></tr>
+    <tr><td>Ollama Cloud</td><td class="q">GPU-time 配额</td><td><a href="https://ollama.com/settings/keys" target="_blank" rel="noreferrer">ollama.com/settings/keys</a></td><td>账号</td></tr>
+    <tr><td>ModelScope 魔搭</td><td class="q">免费 key</td><td><a href="https://modelscope.cn/my/myaccesstoken" target="_blank" rel="noreferrer">modelscope.cn/my/myaccesstoken</a></td><td><span class="tag warn">需阿里云中国实名</span></td></tr>
+  </table>
+
+  <h2>B. 免 key / 匿名可用</h2>
+  <table>
+    <tr><th>供应商</th><th>说明</th><th>入口</th></tr>
+    <tr><td>Kilo</td><td class="q">匿名免费层</td><td><a href="https://app.kilo.ai" target="_blank" rel="noreferrer">app.kilo.ai</a></td></tr>
+    <tr><td>OVH AI Endpoints</td><td class="q">公共免费端点</td><td><a href="https://endpoints.ai.cloud.ovh.net" target="_blank" rel="noreferrer">endpoints.ai.cloud.ovh.net</a></td></tr>
+    <tr><td>LLM7</td><td class="q">免费匿名网关</td><td><a href="https://llm7.io" target="_blank" rel="noreferrer">llm7.io</a></td></tr>
+    <tr><td>AI Horde</td><td class="q">众包算力，匿名</td><td><a href="https://aihorde.net" target="_blank" rel="noreferrer">aihorde.net</a></td></tr>
+  </table>
+
+  <h2>C. 共享配额小网关 · 额度小、变动快</h2>
+  <table>
+    <tr><th>供应商</th><th>免费额度</th><th>领取入口</th><th>门槛</th></tr>
+    <tr><td>IteraCompute</td><td class="q">30M tokens/月</td><td><a href="https://iteracompute.com/free/" target="_blank" rel="noreferrer">iteracompute.com/free</a></td><td>邮箱</td></tr>
+    <tr><td>NavyAI</td><td class="q">150K/天 · 20 RPM</td><td><a href="https://api.navy" target="_blank" rel="noreferrer">api.navy</a></td><td>Discord</td></tr>
+    <tr><td>xKiro</td><td class="q">5M tokens/天</td><td><a href="https://xkiro.com" target="_blank" rel="noreferrer">xkiro.com</a></td><td>邮箱</td></tr>
+    <tr><td>AINative Studio</td><td class="q">~10M tokens/月</td><td><a href="https://ainative.studio" target="_blank" rel="noreferrer">ainative.studio</a></td><td>邮箱</td></tr>
+    <tr><td>LongCat 龙猫</td><td class="q">每日免费</td><td><a href="https://longcat.chat/platform" target="_blank" rel="noreferrer">longcat.chat/platform</a></td><td>邮箱</td></tr>
+    <tr><td>Pollinations</td><td class="q">免费层</td><td><a href="https://enter.pollinations.ai" target="_blank" rel="noreferrer">enter.pollinations.ai</a></td><td>邮箱</td></tr>
+    <tr><td>FreeModel</td><td class="q">月度额度</td><td><a href="https://freemodel.in/dashboard" target="_blank" rel="noreferrer">freemodel.in/dashboard</a></td><td>Telegram</td></tr>
+    <tr><td>BlazeAPI</td><td class="q">每日免费</td><td><a href="https://blazeapi.org/dashboard" target="_blank" rel="noreferrer">blazeapi.org/dashboard</a></td><td>Discord</td></tr>
+    <tr><td>Sail Research</td><td class="q">$5/月</td><td><a href="https://app.sailresearch.com" target="_blank" rel="noreferrer">app.sailresearch.com</a></td><td><span class="tag warn">需绑卡</span></td></tr>
+  </table>
+
+  <h2>D. 需国内实名</h2>
+  <table>
+    <tr><th>供应商</th><th>免费项</th><th>入口</th></tr>
+    <tr><td>百度千帆</td><td class="q">免费 ERNIE</td><td><a href="https://console.bce.baidu.com" target="_blank" rel="noreferrer">console.bce.baidu.com</a></td></tr>
+    <tr><td>火山方舟</td><td class="q">每日免费</td><td><a href="https://console.volcengine.com/ark" target="_blank" rel="noreferrer">console.volcengine.com/ark</a></td></tr>
+    <tr><td>讯飞星火</td><td class="q">Lite 免费</td><td><a href="https://xinghuo.xfyun.cn" target="_blank" rel="noreferrer">xinghuo.xfyun.cn</a></td></tr>
+  </table>
+
+  <p class="foot">另有 40+ 小众网关与搜索类额度（Tavily / Exa / Firecrawl …），完整清单见 FreeLLMAPI 仓库 <code>client/src/components/keys/shared.tsx</code>。请遵守各供应商条款，仅个人自用。</p>
+</div>
+</body>
+</html>

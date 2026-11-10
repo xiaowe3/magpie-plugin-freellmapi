@@ -1,0 +1,58 @@
+{
+  "name": "magpie-plugin-freellmapi",
+  "version": "0.1.0",
+  "description": "FreeLLMAPI provider plugin for magpie: ~34 free LLM providers behind one local OpenAI-compatible gateway.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./server": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "page/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node test/smoke.mjs"
+  },
+  "keywords": [
+    "magpie-plugin",
+    "magpie",
+    "freellmapi",
+    "openai-compatible",
+    "free-llm",
+    "llm-gateway"
+  ],
+  "license": "MIT",
+  "author": "",
+  "homepage": "https://github.com/xiaowe3/magpie-plugin-freellmapi#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaowe3/magpie-plugin-freellmapi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xiaowe3/magpie-plugin-freellmapi/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "magpie": {
+    "options": {
+      "baseUrl": "http://localhost:3001"
+    },
+    "page": {
+      "title": "FreeLLMAPI",
+      "titles": {
+        "zh": "FreeLLMAPI 免费渠道",
+        "zh-TW": "FreeLLMAPI 免費渠道",
+        "ja": "FreeLLMAPI 無料チャネル",
+        "de": "FreeLLMAPI Gratis-Kanäle"
+      },
+      "file": "page/freellmapi.html",
+      "icon": "page/icon.svg"
+    }
+  }
+}

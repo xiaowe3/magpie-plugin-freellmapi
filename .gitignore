@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# logs & os cruft
+*.log
+.DS_Store
+Thumbs.db
+
+# local go build caches (only if you ran magpie's Go tooling here)
+.gomodcache/
+.gocache/
+.gopath/
