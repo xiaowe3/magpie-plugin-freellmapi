@@ -176,17 +176,19 @@ export const FreeLLMAPI = async (input, options) => {
 
     provider: {
       id: PROVIDER_ID,
-      // models asks the gateway's /v1/models and maps it into magpie's table,
-      // marking every model free. It NEVER throws: on a slow/stopped gateway it
-      // returns the last good list (so a configured model never disappears and
-      // an agent turn isn't interrupted), or the list magpie already had.
+      // models asks the gateway's /v1/models?available=true — only the models
+      // FreeLLMAPI can serve right now (plus the router entries: "auto" picks
+      // the best available model, "fusion" fans out to a panel, "auto:<chain>"
+      // is a named fallback chain). It NEVER throws: on a slow/stopped gateway
+      // it returns the last good list, so a configured model never disappears
+      // and an agent turn isn't interrupted.
       models: async (p, { auth, signal } = {}) => {
         const models = p?.models ?? {}
         const key = auth?.type === "api" && typeof auth.key === "string" ? auth.key : ""
         const headers = { accept: "application/json" }
         if (key) headers.authorization = "Bearer " + key
         try {
-          const res = await fetch(base + "/models", {
+          const res = await fetch(base + "/models?available=true", {
             headers,
             signal: deadline(signal, LIST_TIMEOUT_MS),
           })
@@ -196,7 +198,10 @@ export const FreeLLMAPI = async (input, options) => {
           for (const m of list) {
             const id = typeof m?.id === "string" ? m.id.trim() : ""
             if (!id) continue
-            const ctx = Number(m?.context_length ?? m?.context_window ?? m?.limit?.context ?? 0) || 0
+            // an older gateway ignores ?available=true and sends everything:
+            // skip the rows it says cannot serve a request now
+            if (m?.available === false) continue
+            const ctx = Number(m?.context_window ?? m?.context_length ?? m?.limit?.context ?? 0) || 0
             const out = Number(m?.max_output_tokens ?? m?.limit?.output ?? 0) || 0
             const entry = { name: m?.name || m?.display_name || id, free: true }
             if (ctx || out) {
@@ -205,6 +210,12 @@ export const FreeLLMAPI = async (input, options) => {
               if (out) entry.limit.output = out
             }
             models[id] = entry
+          }
+          // "auto" is FreeLLMAPI's own router id; keep it offered even if an
+          // older gateway's listing didn't include it, so an agent can always
+          // hand model choice to FreeLLMAPI.
+          if (!models["auto"]) {
+            models["auto"] = { name: "Auto (FreeLLMAPI picks the best available model)", free: true }
           }
           lastGoodModels.set(base, { ...models })
           return models

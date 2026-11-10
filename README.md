@@ -7,7 +7,8 @@ FreeLLMAPI 在本地起一个 OpenAI 兼容网关（默认 `http://localhost:300
 ## 特性
 
 - **一键登录**：在 magpie 里粘贴 FreeLLMAPI 的**统一 key**（`freellmapi-…`），无需手改配置文件。
-- **动态模型发现**：每次刷新调用 `GET /v1/models`，FreeLLMAPI 里新增的供应商/模型立即出现。
+- **登录后直接接管模型调用**：自动接入 FreeLLMAPI **当前可服务**的模型；并带上它的路由模型——`auto`（FreeLLMAPI 自动挑最佳可用模型、自动失败切换）、`fusion`（多模型合成）、`auto:<链名>`（命名 fallback 链）。在 agent 里选 `freellmapi/auto`，就等于把「选模型 + 容错」交给 FreeLLMAPI，全部走统一 key。
+- **动态模型发现**：每次刷新读 `GET /v1/models?available=true`，FreeLLMAPI 里新增/失效的供应商与模型会自动反映。
 - **请求转发**：自动带上 `Authorization: Bearer <统一 key>`，转发到本地网关。
 - **免费标记**：发现的模型都设为 `free: true`，便于路由优先使用。
 - **用量可视**：读取 FreeLLMAPI 的 `/v1/usage`，在 magpie 用量页显示本月各平台/总计消耗的 token 与请求数。

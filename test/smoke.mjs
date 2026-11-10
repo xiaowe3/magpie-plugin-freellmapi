@@ -21,7 +21,8 @@ function ok(cond, msg) {
 
 const server = http.createServer((req, res) => {
   const auth = req.headers["authorization"] || "";
-  if (req.method === "GET" && req.url === "/v1/models") {
+  const path = new URL(req.url, "http://localhost").pathname;
+  if (req.method === "GET" && path === "/v1/models") {
     if (auth !== "Bearer " + KEY) {
       res.writeHead(401, { "content-type": "application/json" });
       return res.end(JSON.stringify({ error: "bad key" }));
@@ -31,14 +32,16 @@ const server = http.createServer((req, res) => {
       JSON.stringify({
         object: "list",
         data: [
-          { id: "groq/llama-3.3-70b-versatile", context_length: 131072, owned_by: "groq" },
-          { id: "gemini-2.5-flash", context_length: 1048576, max_output_tokens: 8192 },
-          { id: "deepseek-v4" },
+          { id: "groq/llama-3.3-70b-versatile", context_length: 131072, owned_by: "groq", available: true },
+          { id: "gemini-2.5-flash", context_length: 1048576, max_output_tokens: 8192, available: true },
+          { id: "deepseek-v4", available: true },
+          // an unavailable row must be dropped even if a gateway ignores ?available=true
+          { id: "disabled-model", available: false, unavailable_reason: "no_key" },
         ],
       }),
     );
   }
-  if (req.method === "GET" && req.url === "/v1/usage") {
+  if (req.method === "GET" && path === "/v1/usage") {
     if (auth !== "Bearer " + KEY) {
       res.writeHead(403, { "content-type": "application/json" });
       return res.end(JSON.stringify({ error: { message: "unified key only" } }));
@@ -58,7 +61,7 @@ const server = http.createServer((req, res) => {
       }),
     );
   }
-  if (req.method === "POST" && req.url === "/v1/chat/completions") {
+  if (req.method === "POST" && path === "/v1/chat/completions") {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
@@ -109,7 +112,9 @@ try {
   ok(j.sawAuth === "Bearer " + KEY, "gateway saw Bearer key (got " + j.sawAuth + ")");
 
   const models = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
-  ok(Object.keys(models).length === 3, "listed 3 models");
+  ok(Object.keys(models).length === 4, "listed 3 available models + auto");
+  ok(models["disabled-model"] === undefined, "unavailable model dropped");
+  ok(!!models["auto"], "auto router model always offered");
   ok(models["groq/llama-3.3-70b-versatile"].free === true, "model marked free");
   ok(models["groq/llama-3.3-70b-versatile"].limit.context === 131072, "context mapped");
   ok(models["gemini-2.5-flash"].limit.output === 8192, "max_output mapped");
@@ -129,7 +134,7 @@ try {
   // configured model does not vanish and a running agent turn is not broken
   await closeServer();
   const again = await plugin.provider.models(cfg.provider.freellmapi, { auth: { type: "api", key: KEY } });
-  ok(again && Object.keys(again).length === 3, "models returns the cached list when the gateway is down (no throw)");
+  ok(again && Object.keys(again).length === 4, "models returns the cached list when the gateway is down (no throw)");
 
   // a fresh install with no cache and a dead gateway returns {} quietly
   const fresh = await FreeLLMAPI(input, { baseUrl: "http://127.0.0.1:1" });
