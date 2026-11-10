@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- **登录时直接给申请网址、可一键打开。** 每个渠道的登录改为「打开申请页 + 粘贴 key」：点 Sign in 后，magpie 会显示该渠道的**申请/控制台网址**和一个 **Open ↗** 按钮（桌面/网页都点得开浏览器），把页面上拿到的 API key 粘进输入框、点 Finish 即完成，最终存为该渠道的 api key。
+- 每个渠道的申请网址来自 FreeLLMAPI 的 `client/src/components/keys/shared.tsx`（`PLATFORMS`）；Kilo / OVH / LLM7 标记为免 key。
+- 说明：magpie 原生「填 key」弹窗对第三方插件不支持随便塞可点击链接，所以用它的 oauth「打开页面 + 粘贴」流程来实现跳转。
+
 ## 0.2.0
 
 - **重做：插件自带免费渠道，不再依赖单独运行 freellmapi 服务。** 把 FreeLLMAPI 聚合的免费网关（baseUrl 取自其源码 `server/src/providers/`）做成 magpie 的**一批原生 provider**：每个渠道各自填 key，magpie 原生列模型，可用路由组在这些渠道间做失败切换。

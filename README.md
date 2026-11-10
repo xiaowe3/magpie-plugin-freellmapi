@@ -21,18 +21,49 @@ magpie plugin add github:xiaowe3/magpie-plugin-freellmapi
 
 ## 使用（三步）
 
-1. **Providers** 里会新增一批免费渠道（见下方清单），挑你要用的那个，点进去填它自己的 API key（去该渠道的控制台申请）。
-   - 无 key 时不会去访问它（列表保持干净、快速）；填了 key 才会拉模型。
+1. **Providers** 里会新增一批免费渠道（见下方清单），挑你要用的那个点 **Sign in**：
+   - 弹窗里会显示该渠道的**申请/控制台网址**，旁边有 **Open ↗** 按钮，**点一下直接在浏览器打开**（打不开也能复制网址）；
+   - 在该页面创建并复制 API key，粘进 magpie 的输入框，点 **Finish sign-in**，完成。
+   - （Kilo / OVH / LLM7 免 key，直接 Sign in 即可。）
+   - 无 key 时不会去访问该渠道；填了 key 才会拉模型。
 2. 该渠道的模型会自动出现在 magpie 的模型选择器里（读它自己的 `GET /v1/models`）。
-3. 想把「一个模型在多家之间自动切换」做成 freellmapi 那样的容错：在 magpie 里建一个**路由组**，把多家提供同名/同类模型的渠道放进去（或直接用 Smart 路由）。某个渠道限流/失败时 magpie 会换下一个。
+3. 想把「一个模型在多家之间自动切换」做成 freellmapi 那样的容错：在 magpie 里建一个**路由组**，把多家放进去（或直接用 Smart 路由）。某个渠道限流/失败时 magpie 会换下一个。
 
 > 说明：没有一个「统一 key 走所有渠道」的入口了——那需要一个聚合服务；本版是 magpie 原生多 provider。各家 key 存在 magpie 自己的 provider 存储里（`providers.json`，0600）。
 
-## 内置渠道清单（可在 `lib.mjs` 增删）
+## 内置渠道清单与申请入口（可在 `lib.mjs` 增删）
 
-来自 FreeLLMAPI 源码 `server/src/providers/` 的权威 baseUrl：
+`baseUrl` 取自 FreeLLMAPI `server/src/providers/`，`申请入口` 取自其 `client/src/components/keys/shared.tsx`。登录时 magpie 会把这些网址显示在弹窗里，点 **Open ↗** 直接打开。
 
-Cerebras、HuggingFace Router、Cohere、OpenCode Zen、Kilo Gateway、OVH AI Endpoints、Reka、Requesty、Routeway、LLM7（免 key）、Pollinations（免 key）、IteraCompute、xKiro、NavyAI、NaraRouter、SEA-LION、OrcaRouter、UnoRouter、B.AI、Agnes AI、AINative Studio、Aion Labs、BazaarLink、FreeInference、LLMTR、iFlytek Spark、Z.ai（global）。
+| 渠道 | 申请 / 控制台入口 | 备注 |
+|---|---|---|
+| Cerebras | https://cloud.cerebras.ai | |
+| HuggingFace Router | https://huggingface.co/settings/tokens | |
+| Cohere | https://dashboard.cohere.com/api-keys | |
+| OpenCode Zen | https://opencode.ai/auth | |
+| Kilo Gateway | https://app.kilo.ai | 免 key |
+| OVH AI Endpoints | https://endpoints.ai.cloud.ovh.net | 免 key |
+| Reka | https://platform.reka.ai | |
+| Requesty | https://www.requesty.ai | |
+| Routeway | https://routeway.ai | |
+| LLM7 | https://llm7.io | 免 key / 可匿名 |
+| Pollinations | https://enter.pollinations.ai | |
+| IteraCompute | https://iteracompute.com/free/ | |
+| xKiro | https://xkiro.com | |
+| NavyAI | https://api.navy | |
+| NaraRouter | https://router.bynara.id | |
+| SEA-LION | https://sea-lion.ai | |
+| OrcaRouter | https://www.orcarouter.ai | |
+| UnoRouter | https://unorouter.com | |
+| B.AI | https://b.ai | |
+| Agnes AI | https://platform.agnes-ai.com | |
+| AINative Studio | https://ainative.studio | |
+| Aion Labs | https://www.aionlabs.ai | |
+| BazaarLink | https://bazaarlink.ai | |
+| FreeInference | https://freeinference.org | |
+| LLMTR | https://llmtr.com | |
+| iFlytek Spark | https://console.xfyun.cn | 需国内实名 |
+| Z.ai (global) | https://z.ai/manage-apikey/apikey-list | |
 
 （Groq / Mistral / NVIDIA / OpenRouter / SiliconFlow / ModelScope / 智谱 GLM / 千帆 / 火山 / LongCat 等 magpie 已内置预设，这里不重复；直接用 magpie 自带预设即可。）
 

@@ -57,8 +57,17 @@ try {
   ok(ids.length >= 20, `catalog has ${ids.length} free gateways`)
   for (const id of ids) ok(typeof plugin[id] === "function", `export for "${id}" is a provider function`)
 
-  const mk = makeProvider({ id: "mock", name: "Mock Free", baseUrl: base })
+  const mk = makeProvider({ id: "mock", name: "Mock Free", baseUrl: base, keysUrl: "https://example.com/keys" })
   const p = await mk(input, {})
+
+  // sign-in: opening the keys page, then pasting the key as the "code" step
+  const method = p.auth.methods[0]
+  ok(method.type === "oauth", "key provider signs in by opening its keys page")
+  const a = await method.authorize({})
+  ok(a && a.url === "https://example.com/keys", "authorize gives the keys page url -> " + (a && a.url))
+  ok(a && a.method === "code", "the keys page step takes a pasted value")
+  ok((await a.callback("  sk-abc123 ")).key === "sk-abc123", "pasted key becomes the provider key")
+  ok((await a.callback("")).type === "failed", "empty paste is refused")
 
   const cfg = { provider: {} }
   await p.config(cfg)
